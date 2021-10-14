@@ -5,3 +5,4 @@ destroy.plan
 build.plan
 terraform.tfstate
 .terraform.tfstate.lock.info
+terraform.tfstate.backup
