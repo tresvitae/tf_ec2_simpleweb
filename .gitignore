@@ -1,1 +1,7 @@
 terraform.tfvars
+.terraform
+.terraform.lock.hcl
+destroy.plan
+build.plan
+terraform.tfstate
+.terraform.tfstate.lock.info

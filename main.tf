@@ -1,8 +1,8 @@
 #VARIABLES
 variable "aws_access_key" {}
 variable "aws_secret_key" {}
-variable "private_key_path" {}
-variable "key_name" {} # key name cannot be created in TF
+variable "private_key_pair_path" {}
+variable "key_pair_name" {} # key name cannot be created in TF
 variable "region" {
   default = "eu-west-1"
 }
@@ -21,7 +21,7 @@ data "aws_ami" "aws-linux" {
 
     filter {
       name   = "name"
-      values = ["amzn-ami-hvm"]
+      values = ["amzn-ami-hvm*"]
     }
 
     filter {
@@ -36,14 +36,14 @@ data "aws_ami" "aws-linux" {
 }
 
 # RESOURCES
-resource "aws_vpc" "web_vpc"{
+resource "aws_default_vpc" "default"{
 
 }
 
-resource "aws_security_group" "allow_ssh" {
+resource "aws_security_group" "nginx-sg" {
     name = "web_nginx"
     description = "Allow ports to website"
-    vpc_id = aws_vpc.web_vpc.id
+    vpc_id = aws_default_vpc.default.id
 
     ingress {
         from_port   = 22
@@ -66,26 +66,28 @@ resource "aws_security_group" "allow_ssh" {
 }
 
 resource "aws_instance" "nginx" {
-    ami =
-    instance_type = "t2.micro"
-    key_name = var.key_name
-    vpc_security_group_ids = [aws_security_group.allow_ssh.id]
+    ami                    = data.aws_ami.aws-linux.id
+    instance_type          = "t2.micro"
+    key_name               = var.key_pair_name
+    vpc_security_group_ids = [aws_security_group.nginx-sg.id]
 
     connection {
-      type = "ssh"
-      host = self.public_ip
-      user = "ec2-user"
-      private_key = file(var.private_key_path)
-    
-
+      type        = "ssh"
+      host        = self.public_ip
+      user        = "ec2-user"
+      private_key = file(var.private_key_pair_path)
     }
-  
+
+    provisioner "remote-exec" {
+        inline = [
+            "sudo yum install nginx -y",
+            "sudo service nginx start"
+        ]
+    }
 }
 
 
 # OUTPUT
-
 output "aws_instance_public_dns" {
     value = aws_instance.nginx.public_dns
-  
 }
