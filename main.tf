@@ -4,6 +4,13 @@ variable "key_pair_name" {} # key name cannot be created in TF
 variable "region" {
     default = "eu-west-1"
 }
+# # Environment
+variable "environment_name" {
+    default = "Simple Web App"
+}
+variable "environment_type" {
+    default = "dev"
+}
 # # Netowrking
 variable "network_address" {
     default = "10.10.0.0/16"  
@@ -21,6 +28,13 @@ provider "aws" {
     region     = var.region
 }
 
+# LOCALS
+locals {
+    common_tags = {
+        EnvironmentName = var.environment_name
+        EnvironmentType = var.environment_type
+    }
+}
 # DATA
 data "aws_ami" "aws-linux" {
     most_recent = true
@@ -48,21 +62,29 @@ data "aws_availability_zones" "available" {}
 resource "aws_vpc" "web-vpc"{
     cidr_block           = var.network_address
     enable_dns_hostnames = "true"
+
+    tags = merge(local.common_tags, { Name = "${var.environment_name}--vpc" })
 }
 resource "aws_internet_gateway" "igw" {
     vpc_id = aws_vpc.web-vpc.id
+
+    tags = merge(local.common_tags, { Name = "${var.environment_name}--igw" })
 }
 resource "aws_subnet" "pubsub1" {
     cidr_block              = var.pubsub1_address
     vpc_id                  = aws_vpc.web-vpc.id
     map_public_ip_on_launch = "true"
     availability_zone       = data.aws_availability_zones.available.names[0]
+
+    tags = merge(local.common_tags, { Name = "${var.environment_name}--pubsub1" })
 }
 resource "aws_subnet" "pubsub2" {
     cidr_block              = var.pubsub2_address
     vpc_id                  = aws_vpc.web-vpc.id
     map_public_ip_on_launch = "true"
     availability_zone       = data.aws_availability_zones.available.names[1]
+
+    tags = merge(local.common_tags, { Name = "${var.environment_name}--pubsub2" })
 }
 # # Routing
 resource "aws_route_table" "rtb-public" {
@@ -72,6 +94,7 @@ resource "aws_route_table" "rtb-public" {
         cidr_block = "0.0.0.0/0"
         gateway_id = aws_internet_gateway.igw.id
     }
+    tags = merge(local.common_tags, { Name = "${var.environment_name}--rtb" })
 }
 resource "aws_route_table_association" "rtb-pubsub1" {
     subnet_id      = aws_subnet.pubsub1.id
@@ -97,6 +120,7 @@ resource "aws_security_group" "elb-sg" {
         protocol    = -1
         cidr_blocks = ["0.0.0.0/0"]
     }
+    tags = merge(local.common_tags, { Name = "${var.environment_name}--elb-sg" })
 }
 resource "aws_security_group" "nginx-sg" {
     name = "web_nginx_sg"
@@ -121,6 +145,7 @@ resource "aws_security_group" "nginx-sg" {
         protocol    = -1
         cidr_blocks = ["0.0.0.0/0"]
     }
+    tags = merge(local.common_tags, { Name = "${var.environment_name}--nginx-sg" })
 }
 # # Load Balancer
 resource "aws_elb" "web-elb" {
@@ -134,6 +159,7 @@ resource "aws_elb" "web-elb" {
         lb_port           = 80
         lb_protocol       = "http"
     }
+    tags = merge(local.common_tags, { Name = "${var.environment_name}--web-elb" })
 }
 # # Instances
 resource "aws_instance" "nginx1" {
@@ -157,6 +183,7 @@ resource "aws_instance" "nginx1" {
             "echo '<html><head><title>Public Subnet 1</title></head><body style=\"background-color:#BA55D3\"><p style=\"text-align: justify;\"><span style=\"color:#FFFFFF;\"><span style=\"font-size:56px;\">PubSub1</span></span></p></body></html>' | sudo tee /usr/share/nginx/html/index.html"
         ]
     }
+    tags = merge(local.common_tags, { Name = "${var.environment_name}--nginx1" })
 }
 resource "aws_instance" "nginx2" {
     ami                    = data.aws_ami.aws-linux.id
@@ -180,6 +207,7 @@ resource "aws_instance" "nginx2" {
             "echo '<html><head><title>Public Subnet 2</title></head><body style=\"background-color:#4682B4\"><p style=\"text-align: center;\"><span style=\"color:#FFFFFF;\"><span style=\"font-size:56px;\">PubSub2</span></span></p></body></html>' | sudo tee /usr/share/nginx/html/index.html"
         ]
     }
+    tags = merge(local.common_tags, { Name = "${var.environment_name}--nginx2" })
 }
 
 #NATGateway
