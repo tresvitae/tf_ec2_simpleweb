@@ -82,8 +82,24 @@ resource "aws_route_table_association" "rtb-pubsub2" {
     route_table_id = aws_route_table.rtb-public.id
 }
 # # Security Groups
+resource "aws_security_group" "elb-sg" {
+    name   = "nginx_elb_sg"
+    vpc_id = aws_vpc.web-vpc.id
+    ingress {
+        from_port   = 80
+        to_port     = 80
+        protocol    = "tcp"
+        cidr_blocks = ["0.0.0.0/0"]
+    }
+    egress {
+        from_port   = 0
+        to_port     = 0
+        protocol    = -1
+        cidr_blocks = ["0.0.0.0/0"]
+    }
+}
 resource "aws_security_group" "nginx-sg" {
-    name = "web_nginx"
+    name = "web_nginx_sg"
     description = "Allow ports to website"
     vpc_id = aws_vpc.web-vpc.id
 
@@ -104,6 +120,19 @@ resource "aws_security_group" "nginx-sg" {
         to_port     = 0
         protocol    = -1
         cidr_blocks = ["0.0.0.0/0"]
+    }
+}
+# # Load Balancer
+resource "aws_elb" "web-elb" {
+    name            = "nginxELB"
+    subnets         = [aws_subnet.pubsub1.id, aws_subnet.pubsub2.id]
+    security_groups = [aws_security_group.elb-sg.id]
+    instances       = [aws_instance.nginx1.id, aws_instance.nginx2.id]
+    listener {
+        instance_port     = 80
+        instance_protocol = "http"
+        lb_port           = 80
+        lb_protocol       = "http"
     }
 }
 # # Instances
@@ -153,7 +182,11 @@ resource "aws_instance" "nginx2" {
     }
 }
 
+#NATGateway
+#RDS
+
+
 # OUTPUT
 output "aws_instance_public_dns" {
-    value = aws_instance.nginx1.public_dns
+    value = aws_elb.web-elb.dns_name
 }
