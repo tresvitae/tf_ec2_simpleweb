@@ -32,12 +32,12 @@ resource "aws_vpc" "web-vpc"{
     cidr_block           = var.network_address[terraform.workspace]
     enable_dns_hostnames = "true"
 
-    tags = merge(local.common_tags, { Name = "${var.environment_name}--vpc" })
+    tags = merge(local.common_tags, { Name = "vpc--${local.env_name}" })
 }
 resource "aws_internet_gateway" "igw" {
     vpc_id = aws_vpc.web-vpc.id
 
-    tags = merge(local.common_tags, { Name = "${var.environment_name}--igw" })
+    tags = merge(local.common_tags, { Name = "igw--${local.env_name}" })
 }
 resource "aws_subnet" "pubsub" {
     count                   = var.subnet_count[terraform.workspace]
@@ -46,7 +46,7 @@ resource "aws_subnet" "pubsub" {
     map_public_ip_on_launch = "true"
     availability_zone       = data.aws_availability_zones.available.names[count.index]
 
-    tags = merge(local.common_tags, { Name = "${var.environment_name}--pubsub${count.index + 1}" })
+    tags = merge(local.common_tags, { Name = "${local.env_name}--pubsub${count.index + 1}" })
 }
 # # Routing
 resource "aws_route_table" "rtb-public" {
@@ -56,7 +56,7 @@ resource "aws_route_table" "rtb-public" {
         cidr_block = "0.0.0.0/0"
         gateway_id = aws_internet_gateway.igw.id
     }
-    tags = merge(local.common_tags, { Name = "${var.environment_name}--rtb" })
+    tags = merge(local.common_tags, { Name = "rtb--${local.env_name}" })
 }
 resource "aws_route_table_association" "rtb-pubsub" {
     count          = var.subnet_count[terraform.workspace]
@@ -79,7 +79,7 @@ resource "aws_security_group" "elb-sg" {
         protocol    = -1
         cidr_blocks = ["0.0.0.0/0"]
     }
-    tags = merge(local.common_tags, { Name = "${var.environment_name}--elb-sg" })
+    tags = merge(local.common_tags, { Name = "elb-sg--${local.env_name}" })
 }
 resource "aws_security_group" "nginx-sg" {
     name = "web_nginx_sg"
@@ -104,11 +104,10 @@ resource "aws_security_group" "nginx-sg" {
         protocol    = -1
         cidr_blocks = ["0.0.0.0/0"]
     }
-    tags = merge(local.common_tags, { Name = "${var.environment_name}--nginx-sg" })
+    tags = merge(local.common_tags, { Name = "nginx-sg--${local.env_name}" })
 }
 # # Load Balancer
 resource "aws_elb" "web-elb" {
-    name            = "nginxELB"
     subnets         = aws_subnet.pubsub[*].id
     security_groups = [aws_security_group.elb-sg.id]
     instances       = aws_instance.nginx[*].id
@@ -118,7 +117,7 @@ resource "aws_elb" "web-elb" {
         lb_port           = 80
         lb_protocol       = "http"
     }
-    tags = merge(local.common_tags, { Name = "${var.environment_name}--web-elb" })
+    tags = merge(local.common_tags, { Name = "web-elb--${local.env_name}" })
 }
 # # Instances
 resource "aws_instance" "nginx" {
@@ -166,7 +165,7 @@ resource "aws_instance" "nginx" {
             "sudo cp /home/ec2-user/index.html /usr/share/nginx/html/index.html"
         ]
     }
-    tags = merge(local.common_tags, { Name = "${var.environment_name}--nginx" })
+    tags = merge(local.common_tags, { Name = "nginx--${local.env_name}" })
 }
 
 #NATGateway
@@ -177,5 +176,3 @@ resource "aws_instance" "nginx" {
 output "aws_instance_public_dns" {
     value = aws_elb.web-elb.dns_name
 }
-            # "echo '<html><head><title>Public Subnet</title></head><body style=\"background-color:#BA55D3\"><p style=\"text-align: justify;\"><span style=\"color:#FFFFFF;\"><span style=\"font-size:56px;\">PubSub1</span></span></p></body></html>' | sudo tee /usr/share/nginx/html/index.html"
-#            "echo '<!DOCTYPE html><html><head><title>Public Subnet</title></head><body style=\"background-color:#BA55D3\"><p style=\"text-align: justify;\"><span style=\"color:#FFFFFF;\"><span style=\"font-size:56px;\">PubSub<script> function getURL() { alert(window.location.href);}</script></span></span></p></body></html>' | sudo tee /usr/share/nginx/html/index.html"
