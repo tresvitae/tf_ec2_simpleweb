@@ -96,7 +96,7 @@ resource "aws_security_group" "nginx-sg" {
         from_port   = 80
         to_port     = 80
         protocol    = "tcp"
-        cidr_blocks = [var.network_address[terraform.workspace]]
+        cidr_blocks = ["0.0.0.0/0"]
     }
     egress {
         from_port   = 0
@@ -108,6 +108,7 @@ resource "aws_security_group" "nginx-sg" {
 }
 # # Load Balancer
 resource "aws_elb" "web-elb" {
+    name            = "nginx-elb--${lower(local.env_name)}"
     subnets         = aws_subnet.pubsub[*].id
     security_groups = [aws_security_group.elb-sg.id]
     instances       = aws_instance.nginx[*].id
