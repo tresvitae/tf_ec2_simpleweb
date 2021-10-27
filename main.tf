@@ -1,40 +1,9 @@
-#VARIABLES
-variable "private_key_pair_path" {}
-variable "key_pair_name" {} # key name cannot be created in TF
-variable "region" {
-    default = "eu-west-1"
-}
-# # Environment
-variable "environment_name" {
-    default = "Simple Web App"
-}
-variable "environment_type" {
-    default = "dev"
-}
-variable "instance_count" {
-  default = 2
-}
-variable "subnet_count" {
-  default = 2
-}
-# # Netowrking
-variable "network_address" {
-    default = "10.10.0.0/16"  
-}
-
 # PROVIDERS
 provider "aws" {
     profile = "default"
     region     = var.region
 }
 
-# LOCALS
-locals {
-    common_tags = {
-        EnvironmentName = var.environment_name
-        EnvironmentType = var.environment_type
-    }
-}
 # DATA
 data "aws_ami" "aws-linux" {
     most_recent = true
@@ -60,7 +29,7 @@ data "aws_availability_zones" "available" {}
 # RESOURCES
 # # Networking
 resource "aws_vpc" "web-vpc"{
-    cidr_block           = var.network_address
+    cidr_block           = var.network_address[terraform.workspace]
     enable_dns_hostnames = "true"
 
     tags = merge(local.common_tags, { Name = "${var.environment_name}--vpc" })
@@ -71,8 +40,8 @@ resource "aws_internet_gateway" "igw" {
     tags = merge(local.common_tags, { Name = "${var.environment_name}--igw" })
 }
 resource "aws_subnet" "pubsub" {
-    count                   = var.subnet_count
-    cidr_block              = cidrsubnet(var.network_address, 8, count.index)
+    count                   = var.subnet_count[terraform.workspace]
+    cidr_block              = cidrsubnet(var.network_address[terraform.workspace], 8, count.index)
     vpc_id                  = aws_vpc.web-vpc.id
     map_public_ip_on_launch = "true"
     availability_zone       = data.aws_availability_zones.available.names[count.index]
@@ -90,7 +59,7 @@ resource "aws_route_table" "rtb-public" {
     tags = merge(local.common_tags, { Name = "${var.environment_name}--rtb" })
 }
 resource "aws_route_table_association" "rtb-pubsub" {
-    count          = var.subnet_count
+    count          = var.subnet_count[terraform.workspace]
     subnet_id      = aws_subnet.pubsub[count.index].id
     route_table_id = aws_route_table.rtb-public.id
 }
@@ -127,7 +96,7 @@ resource "aws_security_group" "nginx-sg" {
         from_port   = 80
         to_port     = 80
         protocol    = "tcp"
-        cidr_blocks = ["0.0.0.0/0"]
+        cidr_blocks = [var.network_address[terraform.workspace]]
     }
     egress {
         from_port   = 0
@@ -153,12 +122,12 @@ resource "aws_elb" "web-elb" {
 }
 # # Instances
 resource "aws_instance" "nginx" {
-    count                  = var.instance_count
+    count                  = var.instance_count[terraform.workspace]
     ami                    = data.aws_ami.aws-linux.id
-    instance_type          = "t2.micro"
+    instance_type          = var.instance_size[terraform.workspace]
     key_name               = var.key_pair_name
     vpc_security_group_ids = [aws_security_group.nginx-sg.id]
-    subnet_id              = aws_subnet.pubsub[count.index % var.subnet_count].id
+    subnet_id              = aws_subnet.pubsub[count.index % var.subnet_count[terraform.workspace]].id
 
     connection {
         type        = "ssh"
@@ -184,7 +153,6 @@ resource "aws_instance" "nginx" {
 </p>
 </body>
 </html>
-    }
     EOF
         destination = "/home/ec2-user/index.html"
    }
