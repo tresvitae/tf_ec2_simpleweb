@@ -25,7 +25,7 @@ instance_count = {
   UAT = 4
   Production = 6
 }
-/*
+
 db_instance_type = {
   Development = "db.t2.micro"
   UAT = "db.t2.small"
@@ -37,4 +37,5 @@ db_storage_size = {
   UAT = 20
   Production = 50
 }
-*/
+engine_name = "mysql"
+engine_version = "8.0.23"

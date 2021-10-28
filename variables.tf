@@ -15,14 +15,19 @@ variable "instance_count" {
 variable "instance_type" {
     type = map(string)
 }
-/*
+# # Database
 variable "db_instance_type" {
     type = map(string)
 }
 variable "db_storage_size" {
     type = map(number)
 }
-*/
+variable "engine_name" {
+   type = string
+}
+variable "engine_version" {
+   type = string
+}
 # # Netowrking
 variable "network_address" {
     type = map(string)

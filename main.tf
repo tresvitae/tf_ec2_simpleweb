@@ -179,13 +179,16 @@ resource "aws_instance" "nginx" {
 }
 
 #NATGateway
-#RDS
 module "rds" {
     source           = "./modules/rds"
-
-    #nginx-sg         = aws_security_group.nginx-sg.id
-    #db_storage_size  = var.db_storage_size[terraform.workspace]
-    #db_instance_type = var.db_instance_type[terraform.workspace]
-
+    # for RDS instance
+    engine_name      = var.engine_name
+    engine_version   = var.engine_version
+    db_storage_size  = var.db_storage_size[terraform.workspace]
+    db_instance_type = var.db_instance_type[terraform.workspace]
+    # for DB Subnet
     subnets          = aws_subnet.privsub[*].id
+    # for SG
+    environment_vpc  = aws_vpc.web-vpc.id
+    sg_access_to_db  = aws_security_group.nginx-sg.id
 }
