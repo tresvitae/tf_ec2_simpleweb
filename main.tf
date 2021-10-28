@@ -34,6 +34,18 @@ resource "aws_vpc" "web-vpc"{
 
     tags = merge(local.common_tags, { Name = "vpc--${local.env_name}" })
 }
+resource "aws_eip" "nat-eip" {
+    vpc = true
+    depends_on = [aws_internet_gateway.igw]
+}
+resource "aws_nat_gateway" "rds-nat" {
+    allocation_id = aws_eip.nat-eip.id
+    #Will select first private subnet
+    subnet_id     = aws_subnet.privsub[0].id
+    depends_on    = [aws_internet_gateway.igw]
+    
+    tags = merge(local.common_tags, {Name = "rds-nat--${local.env_name}" })
+}
 resource "aws_internet_gateway" "igw" {
     vpc_id = aws_vpc.web-vpc.id
 
@@ -65,12 +77,26 @@ resource "aws_route_table" "rtb-public" {
         cidr_block = "0.0.0.0/0"
         gateway_id = aws_internet_gateway.igw.id
     }
-    tags = merge(local.common_tags, { Name = "rtb--${local.env_name}" })
+    tags = merge(local.common_tags, { Name = "rtb-pubic--${local.env_name}" })
 }
 resource "aws_route_table_association" "rtb-pubsub" {
     count          = var.subnet_count[terraform.workspace]
     subnet_id      = aws_subnet.pubsub[count.index].id
     route_table_id = aws_route_table.rtb-public.id
+}
+resource "aws_route_table" "rtb-private" {
+    vpc_id = aws_vpc.web-vpc.id
+    
+    route {
+        cidr_block     =  "0.0.0.0/0"
+        nat_gateway_id = aws_nat_gateway.rds-nat.id
+    }
+    tags = merge(local.common_tags, { Name = "rtb-private--${local.env_name}" })
+}
+resource "aws_route_table_association" "rtb-privsub" {
+    count          = var.subnet_count[terraform.workspace]
+    subnet_id      = aws_subnet.privsub[count.index].id
+    route_table_id = aws_route_table.rtb-private.id
 }
 # # Security Groups
 resource "aws_security_group" "elb-sg" {
@@ -178,7 +204,6 @@ resource "aws_instance" "nginx" {
     tags = merge(local.common_tags, { Name = "nginx--${local.env_name}" })
 }
 
-#NATGateway
 module "rds" {
     source           = "./modules/rds"
     # for RDS instance
