@@ -48,6 +48,15 @@ resource "aws_subnet" "pubsub" {
 
     tags = merge(local.common_tags, { Name = "${local.env_name}--pubsub${count.index + 1}" })
 }
+resource "aws_subnet" "privsub" {
+    count                   = var.subnet_count[terraform.workspace]
+    cidr_block              = cidrsubnet(var.network_address[terraform.workspace], 8, count.index + 10)
+    vpc_id                  = aws_vpc.web-vpc.id
+    map_public_ip_on_launch = "false"
+    availability_zone       = data.aws_availability_zones.available.names[count.index]
+
+    tags = merge(local.common_tags, { Name = "${local.env_name}--privsub${count.index + 1}" })
+}
 # # Routing
 resource "aws_route_table" "rtb-public" {
     vpc_id = aws_vpc.web-vpc.id
@@ -172,7 +181,11 @@ resource "aws_instance" "nginx" {
 #NATGateway
 #RDS
 module "rds" {
-    source = "./modules/rds"
+    source           = "./modules/rds"
 
-    subnets = aws_subnet.pubsub[*].id
+    #nginx-sg         = aws_security_group.nginx-sg.id
+    #db_storage_size  = var.db_storage_size[terraform.workspace]
+    #db_instance_type = var.db_instance_type[terraform.workspace]
+
+    subnets          = aws_subnet.privsub[*].id
 }
