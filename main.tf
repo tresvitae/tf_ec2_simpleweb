@@ -25,7 +25,6 @@ data "aws_ami" "aws_linux" {
     values = ["hvm"]
   }
 }
-data "aws_availability_zones" "available" {}
 
 # LOCALS
 locals {
@@ -37,91 +36,10 @@ locals {
 }
 
 # RESOURCES
-# # Networking
-resource "aws_vpc" "web_vpc" {
-  cidr_block           = var.network_address[terraform.workspace]
-  enable_dns_hostnames = true
-  enable_dns_support   = true
-
-  tags = merge(local.common_tags, { Name = "vpc--${local.env_name}" })
-}
-
-resource "aws_eip" "nat_eip" {
-  vpc        = true
-  depends_on = [aws_internet_gateway.igw]
-}
-
-resource "aws_nat_gateway" "rds_nat" {
-  allocation_id = aws_eip.nat_eip.id
-  subnet_id     = aws_subnet.privsub[0].id # Will select first private subnet
-  depends_on    = [aws_internet_gateway.igw]
-
-  tags = merge(local.common_tags, { Name = "rds_nat--${local.env_name}" })
-}
-
-resource "aws_internet_gateway" "igw" {
-  vpc_id = aws_vpc.web_vpc.id
-
-  tags = merge(local.common_tags, { Name = "igw--${local.env_name}" })
-}
-
-resource "aws_subnet" "pubsub" {
-  count                   = var.subnet_count[terraform.workspace]
-  cidr_block              = cidrsubnet(var.network_address[terraform.workspace], 8, count.index)
-  vpc_id                  = aws_vpc.web_vpc.id
-  map_public_ip_on_launch = true
-  availability_zone       = data.aws_availability_zones.available.names[count.index]
-
-  tags = merge(local.common_tags, { Name = "${local.env_name}--pubsub${count.index + 1}" })
-}
-
-resource "aws_subnet" "privsub" {
-  count                   = var.subnet_count[terraform.workspace]
-  cidr_block              = cidrsubnet(var.network_address[terraform.workspace], 8, count.index + 10)
-  vpc_id                  = aws_vpc.web_vpc.id
-  map_public_ip_on_launch = false
-  availability_zone       = data.aws_availability_zones.available.names[count.index]
-
-  tags = merge(local.common_tags, { Name = "${local.env_name}--privsub${count.index + 10}" })
-}
-
-# # Routing
-resource "aws_route_table" "rtb_public" {
-  vpc_id = aws_vpc.web_vpc.id
-  route {
-    cidr_block = "0.0.0.0/0"
-    gateway_id = aws_internet_gateway.igw.id
-  }
-
-  tags = merge(local.common_tags, { Name = "rtb_pubic--${local.env_name}" })
-}
-
-resource "aws_route_table_association" "rtb_pubsub" {
-  count          = var.subnet_count[terraform.workspace]
-  subnet_id      = aws_subnet.pubsub[count.index].id
-  route_table_id = aws_route_table.rtb_public.id
-}
-
-resource "aws_route_table" "rtb_private" {
-  vpc_id = aws_vpc.web_vpc.id
-  route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.rds_nat.id
-  }
-
-  tags = merge(local.common_tags, { Name = "rtb_private--${local.env_name}" })
-}
-
-resource "aws_route_table_association" "rtb-privsub" {
-  count          = var.subnet_count[terraform.workspace]
-  subnet_id      = aws_subnet.privsub[count.index].id
-  route_table_id = aws_route_table.rtb_private.id
-}
-
 resource "aws_security_group" "nginx_sg" {
   name        = "web_nginx_sg"
   description = "Allow ports to website"
-  vpc_id      = aws_vpc.web_vpc.id
+  vpc_id      =  module.vpc.web_vpc_id
   ingress {
     from_port   = 22
     to_port     = 22
@@ -150,7 +68,7 @@ resource "aws_instance" "nginx" {
   instance_type          = var.instance_type[terraform.workspace]
   key_name               = var.key_pair_name
   vpc_security_group_ids = [aws_security_group.nginx_sg.id]
-  subnet_id              = aws_subnet.pubsub[count.index % var.subnet_count[terraform.workspace]].id
+  subnet_id              = module.vpc.subnet_for_nginx_instance
 
   connection {
     type        = "ssh"
@@ -198,9 +116,9 @@ module "rds" {
   engine_version   = var.engine_version
   db_storage_size  = var.db_storage_size[terraform.workspace]
   db_instance_type = var.db_instance_type[terraform.workspace]
-  subnets          = aws_subnet.privsub[*].id # for DB Subnet
-  environment_vpc  = aws_vpc.web_vpc.id       # for SG
-  sg_access_to_db  = aws_security_group.nginx_sg.id
+  subnets          = module.vpc.vpc_all_priv_subnets_id # for DB Subnet
+  environment_vpc  = module.vpc.web_vpc_id # for SG
+  sg_access_to_db  = [aws_security_group.nginx_sg.id]
   common_tags      = local.common_tags
   env_name         = local.env_name
 }
@@ -208,9 +126,18 @@ module "rds" {
 module "elb" {
   source      = "./modules/elb"
   elb_name    = "elb-nginx--${lower(local.env_name)}"
-  subnets     = aws_subnet.pubsub[*].id
+  subnets     = module.vpc.vpc_all_pub_subnets_id
   instances   = aws_instance.nginx[*].id
-  vpc         = aws_vpc.web_vpc.id
+  vpc         = module.vpc.web_vpc_id
   common_tags = local.common_tags
   env_name    = local.env_name
+}
+
+module "vpc" {
+  source = "./modules/vpc"
+    common_tags = local.common_tags
+  env_name    = local.env_name
+
+  network_address = var.network_address
+  subnet_count = var.subnet_count
 }
