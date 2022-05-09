@@ -1,46 +1,54 @@
-# VARIABLES
 variable "private_key_pair_path" {}
+
 variable "key_pair_name" {} # key name cannot be created in TF
+
 variable "region" {
-    default = "eu-west-1"
+  default = "eu-west-1"
 }
 
-# # Environment
+variable "aws_worker_profile" {
+  default = "terraform"
+}
+
+variable "shared_credentials_files" {
+  default = "~/.aws/credentials"
+}
+
 variable "environment_type" {
-    default = "Development"
+  default = "Development"
 }
+
 variable "instance_count" {
-    type = map(number)
+  type = map(number)
 }
+
 variable "instance_type" {
-    type = map(string)
+  type = map(string)
 }
+
 # # Database
 variable "db_instance_type" {
-    type = map(string)
-}
-variable "db_storage_size" {
-    type = map(number)
-}
-variable "engine_name" {
-   type = string
-}
-variable "engine_version" {
-   type = string
-}
-# # Netowrking
-variable "network_address" {
-    type = map(string)
-}
-variable "subnet_count" {
-    type = map(number)
+  type = map(string)
 }
 
-# LOCALS
-locals {
-    env_name = terraform.workspace
-    common_tags = {
-        EnvironmentName = local.env_name
-        EnvironmentType = var.environment_type
-    }
+variable "db_storage_size" {
+  type = map(number)
 }
+
+variable "engine_name" {
+  type = string
+}
+
+variable "engine_version" {
+  type = string
+}
+
+# # Netowrking
+variable "network_address" {
+  type = map(string)
+}
+
+variable "subnet_count" {
+  type = map(number)
+}
+
